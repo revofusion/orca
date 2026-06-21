@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { join } from 'path'
 import { scanAiVaultSessions } from '../ai-vault/session-scanner'
+import { getWslHome, listWslDistros } from '../wsl'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 
 const AI_VAULT_CACHE_TTL_MS = 15_000
@@ -36,7 +37,11 @@ async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListR
   const additionalCodexSessionsDirs =
     handlerOptions.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ??
     []
-  inflightList = scanAiVaultSessions({ limit: args?.limit, additionalCodexSessionsDirs })
+  inflightList = scanAiVaultSessions({
+    limit: args?.limit,
+    additionalCodexSessionsDirs,
+    wslHomeDirs: getAiVaultWslHomeDirs()
+  })
     .then((result) => {
       cachedList = {
         key,
@@ -57,4 +62,13 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   ipcMain.handle('aiVault:listSessions', (_event, args?: AiVaultListArgs) =>
     listAiVaultSessions(args)
   )
+}
+
+function getAiVaultWslHomeDirs(): string[] {
+  if (process.platform !== 'win32') {
+    return []
+  }
+  return listWslDistros()
+    .map((distro) => getWslHome(distro))
+    .filter((homeDir): homeDir is string => Boolean(homeDir))
 }
